@@ -1,6 +1,3 @@
-!git clone https://github.com/orsanawwad/ML4_dataset.git
-  
-
 from __future__ import print_function
 
 from gcommand_loader import GCommandLoader
@@ -13,17 +10,19 @@ from torchvision import datasets, transforms
 from torch.autograd import Variable
 
 
-batch_size = 64
+batch_size = 100
 
 
 train_dataset = GCommandLoader('./data/train')
 
 test_dataset = GCommandLoader('./data/test')
 
+
+
 valid_dataset = GCommandLoader('./data/valid')
 
 train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=None,
+        train_dataset, batch_size=batch_size, shuffle=True,
         num_workers=20, pin_memory=True, sampler=None)
 
 valid_loader = torch.utils.data.DataLoader(
@@ -43,20 +42,24 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 10, kernel_size=5)
         self.conv2 = nn.Conv2d(10, 20, kernel_size=5)
-        self.mp = nn.MaxPool2d(2)
-        self.fc = nn.Linear(320, 10)
+        self.mp = nn.MaxPool2d(2,2)
+        self.fc1 = nn.Linear(16280, 1000)
+        self.fc2 = nn.Linear(1000, 300)
+        self.fc3 = nn.Linear(300, 30)
 
     def forward(self, x):
         in_size = x.size(0)
         x = F.relu(self.mp(self.conv1(x)))
         x = F.relu(self.mp(self.conv2(x)))
         x = x.view(in_size, -1)  # flatten the tensor
-        x = self.fc(x)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
         return F.log_softmax(x)
 
 
 model = Net()
-optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.5)
+optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=0)
 
 
 def train(epoch):
@@ -68,12 +71,10 @@ def train(epoch):
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
-        if batch_idx % 10 == 0:
+        if batch_idx % 10 == 0:         
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_loader.dataset),
-                100. * batch_idx / len(train_loader), loss.data[0]))
-
-
+                100. * batch_idx / len(train_loader), loss.data.cpu()))
 
 def test():
     model.eval()
@@ -83,7 +84,7 @@ def test():
         data, target = Variable(data, volatile=True), Variable(target)
         output = model(data)
         # sum up batch loss
-        test_loss += F.nll_loss(output, target, size_average=False).data[0]
+        test_loss += F.nll_loss(output, target, size_average=False).data
         # get the index of the max log-probability
         pred = output.data.max(1, keepdim=True)[1]
         correct += pred.eq(target.data.view_as(pred)).cpu().sum()
@@ -97,3 +98,4 @@ def test():
 for epoch in range(1, 5):
     train(epoch)
     test()
+
